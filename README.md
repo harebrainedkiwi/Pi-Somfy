@@ -4,9 +4,11 @@
 
 This project allows to operate multiple Somfy shutters using the **RTS protocol** from a Raspberry Pi with cheap hardware costing less than $2. It comes with a command line interface, a web interface and an Amazon Alexa interface. 
 
+Compatible with Raspberry Pi 5.  Replaces the pigpio library in original Nickduino version with the lgpio library (Requires lgpio version 0.2.2.0 or greater)
+
 ## 2 Hardware
 
-This project has been developed and tested with a Raspberry Pi B+ and a Raspberry Pi 3 as the base platforms. Since the serial port and network are the only external ports used, the program could be used on other platforms with minor modifications and testing.
+This project has been developed and tested with a Raspberry Pi 5. Since the serial port and network are the only external ports used, the program could be used on other platforms with minor modifications and testing.
 
 Wi-Fi connectivity and Ethernet cable should both work. Note that the hardware has to be reasonably close (i.e. in the same house or in the same aisle of your mansion: just like a physical remote) to the shutters you operate, as the signal strength will otherwise not be sufficient.
 
@@ -29,7 +31,7 @@ Now the last step is to connect your adjusted RF transmitter to your Raspberry P
 
 ![Diagram](documentation/Wiring%20Diagram.png)
 
-Note that I used GPIO 4 but you can change the value of __TXGPIO__ to whatever you want if you choose a different way to connect your RF emitter. This is a configuration parameter in operateShutters.conf.
+GPIO 4 should be connected your RF emitter.
 
 OK. now this all should look like this. Note that some of the pictures are a bit confusing with regards to which GPIO a cable connects to. It's easier to see on the above diagram. But if you struggle, maybe the [Wiring Diagram](documentation/Wiring%20Diagram.txt) helps.
 
