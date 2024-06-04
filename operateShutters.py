@@ -8,7 +8,7 @@ import locale
 import time
 import datetime
 import ephem
-import pigpio
+import lgpio
 import socket
 import signal, atexit, traceback
 import logging, logging.handlers
@@ -239,13 +239,12 @@ class Shutter(MyLog):
            # print (codecs.encode(shutterId, 'hex_codec'))
            self.config.setCode(shutterId, code+1)
 
-           pi = pigpio.pi() # connect to Pi
+           #pi = pigpio.pi() # connect to Pi
+           h = lgpio.gpiochip_open(4)
 
-           if not pi.connected:
+           if h<=0:
               exit()
 
-           pi.wave_add_new()
-           pi.set_mode(self.TXGPIO, pigpio.OUTPUT)
 
            self.LogInfo ("Remote  :      " + "0x%0.2X" % teleco + ' (' + self.config.Shutters[shutterId]['name'] + ')')
            self.LogInfo ("Button  :      " + "0x%0.2X" % button)
@@ -287,49 +286,47 @@ class Shutter(MyLog):
 
            #This is where all the awesomeness is happening. You're telling the daemon what you wanna send
            wf=[]
-           wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 9415)) # wake up pulse
-           wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 89565)) # silence
+           wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 9415)) # wake up pulse
+           wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 89565)) # silence
            for i in range(2): # hardware synchronization
-              wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 2560))
-              wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 2560))
-           wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 4550)) # software synchronization
-           wf.append(pigpio.pulse(0, 1<<self.TXGPIO,  640))
+              wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 2560))
+              wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 2560))
+           wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 4550)) # software synchronization
+           wf.append(lgpio.pulse(0, lgpio.GROUP_ALL,  640))
 
            for i in range (0, 56): # manchester enconding of payload data
               if ((self.frame[int(i/8)] >> (7 - (i%8))) & 1):
-                 wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 640))
-                 wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 640))
+                 wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 640))
+                 wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 640))
               else:
-                 wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 640))
-                 wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 640))
+                 wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 640))
+                 wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 640))
 
-           wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 30415)) # interframe gap
+           wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 30415)) # interframe gap
 
            for j in range(1,repetition): # repeating frames
                     for i in range(7): # hardware synchronization
-                          wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 2560))
-                          wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 2560))
-                    wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 4550)) # software synchronization
-                    wf.append(pigpio.pulse(0, 1<<self.TXGPIO,  640))
+                          wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 2560))
+                          wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 2560))
+                    wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 4550)) # software synchronization
+                    wf.append(lgpio.pulse(0, lgpio.GROUP_ALL,  640))
 
                     for i in range (0, 56): # manchester enconding of payload data
                           if ((self.frame[int(i/8)] >> (7 - (i%8))) & 1):
-                             wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 640))
-                             wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 640))
+                             wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 640))
+                             wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 640))
                           else:
-                             wf.append(pigpio.pulse(1<<self.TXGPIO, 0, 640))
-                             wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 640))
+                             wf.append(lgpio.pulse(1, lgpio.GROUP_ALL, 640))
+                             wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 640))
 
-                    wf.append(pigpio.pulse(0, 1<<self.TXGPIO, 30415)) # interframe gap
+                    wf.append(lgpio.pulse(0, lgpio.GROUP_ALL, 30415)) # interframe gap
 
-           pi.wave_add_generic(wf)
-           wid = pi.wave_create()
-           pi.wave_send_once(wid)
-           while pi.wave_tx_busy():
-              pass
-           pi.wave_delete(wid)
+           lgpio.gpio_claim_output(h, self.TXGPIO)
+           lgpio.tx_wave(h, self.TXGPIO, wf)
+           while lgpio.tx_busy(h, self.TXGPIO, lgpio.TX_WAVE):
+               time.sleep(0.01)
+           lgpio.gpiochip_close(h)
 
-           pi.stop()
        finally:
            self.lock.release()
            self.LogDebug("sendCommand: Lock released")
@@ -378,10 +375,6 @@ class operateShutters(MyLog):
 
         if self.IsLoaded():
             self.LogWarn("operateShutters.py is already loaded.")
-            sys.exit(1)
-
-        if not self.startPIGPIO():
-            self.LogConsole("Not able to start PIGPIO")
             sys.exit(1)
 
         self.shutter = Shutter(log = self.log, config = self.config)
